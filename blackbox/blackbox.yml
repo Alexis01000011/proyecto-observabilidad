@@ -1,0 +1,10 @@
+# Blackbox Exporter — módulos de sondeo. M0 · esqueleto.
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: []        # vacío = cualquier 2xx cuenta como éxito
+      follow_redirects: true        # WordPress puede redirigir (setup/login) — riesgo APP-6
+      preferred_ip_protocol: ip4

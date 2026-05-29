@@ -1,0 +1,26 @@
+# ---- Secretos y credenciales (NUNCA versionar) ----
+.env
+secrets/
+*.pem
+*_password*
+*.key
+
+# ---- Datos persistentes / runtime ----
+*/data/
+*.sqlite3
+
+# ---- Python ----
+__pycache__/
+*.pyc
+
+# ---- Borradores no entregables ----
+# El entregable real es preguntas_reflexion.pdf (se genera en M8); el .md es borrador.
+preguntas_reflexion.md
+
+# ---- Evidencias (capturas): descomenta si NO quieres versionarlas ----
+# evidencias/*.png
+
+# ---- Misc ----
+*.zip
+.DS_Store
+Thumbs.db

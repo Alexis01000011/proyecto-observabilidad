@@ -1,0 +1,169 @@
+# observabilidad-devops · docker-compose (M0 · esqueleto)
+# Proyecto Final — plataforma de observabilidad (Prometheus + Grafana + Alertmanager + exporters)
+#
+# Estado M0: estructura completa que valida con `docker compose config`.
+# El cableado fino (flags/mounts de node_exporter y cAdvisor, método de credencial del
+# mysqld-exporter, código real de Django y la app de Tomcat) se afina en M2/M3.
+# Las imágenes llevan tags de arranque; se pinnean/validan en M2/M3.
+#
+# Secretos: NO van aquí. Se interpolan desde un archivo `.env` (gitignored) creado en deploy
+# a partir de `.env.example`. En M0 (sin `.env`) `docker compose config` avisa "variable not set"
+# (warnings, no errores) → el criterio de M0 (exit 0) se cumple igual.
+
+name: observabilidad-devops
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  mariadb_data:
+  wordpress_data:
+
+services:
+  # ===================== STACK DE OBSERVABILIDAD =====================
+
+  prometheus:
+    image: prom/prometheus:v2.53.0          # pin/validar en M2
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle               # permite recargar config sin reiniciar
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"                # interno: solo localhost (acceso por túnel SSH)
+    networks: [monitoring]
+
+  grafana:
+    image: grafana/grafana:11.1.0            # pin/validar en M2
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"                # exposición pública vía NPM (M1)
+    networks: [monitoring]
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./secrets/smtp_password:/etc/alertmanager/smtp_password:ro   # secreto, fuera del repo (M5)
+    ports:
+      - "127.0.0.1:9093:9093"                # interno: solo localhost
+    networks: [monitoring]
+
+  node_exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: node_exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host                   # M2: métricas reales del host (riesgo DOK-1)
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks: [monitoring]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true                          # Debian/cgroup v2 (riesgo DOK-2)
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "127.0.0.1:8081:8080"                 # interno
+    networks: [monitoring]
+
+  blackbox_exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: blackbox_exporter
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks: [monitoring]
+
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.14.0       # v0.14 soporta DATA_SOURCE_NAME (riesgo DOK-3)
+    container_name: mysqld-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "exporter:${EXPORTER_DB_PASSWORD}@(mariadb:3306)/"
+    networks: [monitoring]
+    depends_on: [mariadb]
+
+  # ===================== APLICACIONES MONITOREADAS =====================
+
+  mariadb:
+    image: mariadb:11.4
+    container_name: mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./mariadb/init:/docker-entrypoint-initdb.d:ro   # crea djangodb + wordpress (M0)
+    networks: [monitoring]
+    # 3306 NO se publica (solo red interna)
+
+  django-apache:
+    build: ./django                           # app real + django-prometheus en M3
+    container_name: django-apache
+    restart: unless-stopped
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DJANGO_DB_NAME: ${DJANGO_DB_NAME}
+      DJANGO_DB_USER: ${DJANGO_DB_USER}
+      DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD}
+      DJANGO_DB_HOST: mariadb
+    networks: [monitoring]
+    depends_on: [mariadb]
+    # 80 no se publica al host; NPM proxea por nombre de contenedor (M1). /metrics restringido (M3)
+
+  tomcat:
+    build: ./tomcat                           # tomcat oficial + sample app + JMX agent en M3
+    container_name: tomcat
+    restart: unless-stopped
+    networks: [monitoring]
+    # 8080 (app) vía NPM; 9404 (JMX) solo interno para Prometheus
+
+  wordpress:
+    image: wordpress:6-php8.2-apache
+    container_name: wordpress
+    restart: unless-stopped
+    environment:
+      WORDPRESS_DB_HOST: mariadb:3306
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+    volumes:
+      - wordpress_data:/var/www/html
+    networks: [monitoring]
+    depends_on: [mariadb]
+    # 80 no se publica; NPM proxea (M1)

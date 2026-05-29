@@ -1,0 +1,6 @@
+# JMX Exporter — configuración para Tomcat/JVM (M0 · esqueleto, se afina en M3).
+# Por defecto expone todas las MBeans; en M3 se pueden añadir reglas/whitelist.
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+rules:
+  - pattern: ".*"

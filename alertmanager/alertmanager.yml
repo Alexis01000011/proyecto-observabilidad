@@ -1,0 +1,24 @@
+# Alertmanager — envío de alertas por correo (SMTP Gmail). M0 · esqueleto; se valida en M5.
+#
+# El App Password de Gmail NO va en este archivo ni en el repo: se lee de un archivo
+# montado fuera de git (secrets/smtp_password) vía smtp_auth_password_file.
+# El remitente/usuario no son secretos y van en claro.
+global:
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alexiskyc@gmail.com'
+  smtp_auth_username: 'alexiskyc@gmail.com'
+  smtp_auth_password_file: '/etc/alertmanager/smtp_password'
+  smtp_require_tls: true
+
+route:
+  receiver: 'correo-devops'
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 1h
+
+receivers:
+  - name: 'correo-devops'
+    email_configs:
+      # Destinatario DISTINTO al remitente — definir el valor real antes de M5.
+      - to: 'CAMBIAR_destinatario@ejemplo.com'
+        send_resolved: true

@@ -1,0 +1,56 @@
+# Prometheus — scraping y alerting (M0 · esqueleto; targets se verifican UP en M4)
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Reglas de alerta (A1–A8)
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# Envío de alertas a Alertmanager
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: "node_exporter"
+    static_configs:
+      - targets: ["node_exporter:9100"]
+
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: "django"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["django-apache:80"]
+
+  - job_name: "tomcat"
+    static_configs:
+      - targets: ["tomcat:9404"]
+
+  - job_name: "mariadb"
+    static_configs:
+      - targets: ["mysqld-exporter:9104"]
+
+  # WordPress por disponibilidad HTTP (blackbox) contra el ORIGIN INTERNO (riesgo APP-6)
+  - job_name: "wordpress_http"
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://wordpress:80
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox_exporter:9115

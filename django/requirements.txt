@@ -1,0 +1,4 @@
+# Dependencias de la app Django de práctica (se instalan en M3).
+Django>=5.0,<5.1
+django-prometheus>=2.3
+mysqlclient>=2.2

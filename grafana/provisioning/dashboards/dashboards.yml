@@ -1,0 +1,13 @@
+# Grafana — provider de dashboards (carga .json desde el volumen). M0.
+# Los .json se añaden en M6.
+apiVersion: 1
+providers:
+  - name: 'observabilidad'
+    orgId: 1
+    folder: 'Observabilidad'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true
