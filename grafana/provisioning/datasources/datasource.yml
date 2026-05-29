@@ -1,9 +1,15 @@
-# Grafana — datasource Prometheus (provisioning). M0.
+# Grafana — datasource Prometheus (provisioning).
+# access: proxy → el backend de Grafana llama a http://prometheus:9090 por la red interna
+# 'monitoring' (nunca pasa por NPM/Cloudflare), así que el proxy del subdominio no le afecta.
 apiVersion: 1
 datasources:
   - name: Prometheus
     type: prometheus
+    uid: prometheus              # uid estable para que los dashboards lo referencien de forma determinista (M6)
     access: proxy
     url: http://prometheus:9090
     isDefault: true
     editable: true
+    jsonData:
+      httpMethod: POST           # default moderno de Grafana; evita límites de longitud de URL
+      timeInterval: 15s          # coincide con scrape_interval de Prometheus
