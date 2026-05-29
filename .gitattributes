@@ -1,0 +1,7 @@
+# Normaliza fin de línea a LF en archivos de configuración (el repo se edita en Windows/OneDrive).
+# Evita que un `git add` reintroduzca CRLF en YAML/scripts/SQL montados dentro de contenedores.
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.sql       text eol=lf
+*.sh        text eol=lf
+Dockerfile  text eol=lf
