@@ -1,20 +1,25 @@
-# observabilidad-devops · docker-compose (M0 · esqueleto)
+# observabilidad-devops · docker-compose
 # Proyecto Final — plataforma de observabilidad (Prometheus + Grafana + Alertmanager + exporters)
 #
-# Estado M0: estructura completa que valida con `docker compose config`.
-# El cableado fino (flags/mounts de node_exporter y cAdvisor, método de credencial del
-# mysqld-exporter, código real de Django y la app de Tomcat) se afina en M2/M3.
-# Las imágenes llevan tags de arranque; se pinnean/validan en M2/M3.
+# Estado: núcleo de observabilidad cableado (M2). El código real de Django y la app de
+# Tomcat, y el método de credencial del mysqld-exporter, se afinan en M3.
 #
 # Secretos: NO van aquí. Se interpolan desde un archivo `.env` (gitignored) creado en deploy
-# a partir de `.env.example`. En M0 (sin `.env`) `docker compose config` avisa "variable not set"
-# (warnings, no errores) → el criterio de M0 (exit 0) se cumple igual.
+# a partir de `.env.example`. Sin `.env`, `docker compose config` avisa "variable not set"
+# (warnings, no errores) para los servicios que las usan.
+#
+# Prerrequisitos de deploy:
+#   1) `docker network create proxy`  (red externa compartida con Nginx Proxy Manager; ver red 'proxy').
+#   2) `secrets/smtp_password` debe existir como ARCHIVO antes del `up` (placeholder en M2; real en M5).
 
 name: observabilidad-devops
 
 networks:
   monitoring:
     driver: bridge
+  proxy:                                    # red externa COMPARTIDA con Nginx Proxy Manager (/opt/npm)
+    external: true                          # se crea a mano en el host: `docker network create proxy`
+    name: proxy                             # mismo objeto de red en ambos compose (sin prefijo de proyecto)
 
 volumes:
   prometheus_data:
@@ -26,7 +31,7 @@ services:
   # ===================== STACK DE OBSERVABILIDAD =====================
 
   prometheus:
-    image: prom/prometheus:v2.53.0          # pin/validar en M2
+    image: prom/prometheus:v2.53.0          # LTS
     container_name: prometheus
     restart: unless-stopped
     command:
@@ -42,20 +47,22 @@ services:
     networks: [monitoring]
 
   grafana:
-    image: grafana/grafana:11.1.0            # pin/validar en M2
+    image: grafana/grafana:11.1.13           # 11.1.13: corrige CVE-2024-9264 (inyección de comandos / LFI, crítica)
     container_name: grafana
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
       GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+      GF_SECURITY_COOKIE_SECURE: "true"      # el origen externo es HTTPS (Cloudflare→NPM): cookie de sesión Secure
+      GF_SECURITY_COOKIE_SAMESITE: lax        # login por formulario, sin OAuth (default explícito)
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "127.0.0.1:3000:3000"                # exposición pública vía NPM (M1)
-    networks: [monitoring]
+      - "127.0.0.1:3000:3000"                # admin por túnel SSH; NPM llega por la red 'proxy', no por este bind
+    networks: [monitoring, proxy]            # 'proxy' permite que NPM resuelva 'grafana' por nombre
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
@@ -65,7 +72,7 @@ services:
       - --config.file=/etc/alertmanager/alertmanager.yml
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - ./secrets/smtp_password:/etc/alertmanager/smtp_password:ro   # secreto, fuera del repo (M5)
+      - ./secrets/smtp_password:/etc/alertmanager/smtp_password:ro   # secreto, fuera del repo (placeholder en M2)
     ports:
       - "127.0.0.1:9093:9093"                # interno: solo localhost
     networks: [monitoring]
@@ -74,24 +81,35 @@ services:
     image: prom/node-exporter:v1.8.1
     container_name: node_exporter
     restart: unless-stopped
-    command:
-      - --path.rootfs=/host                   # M2: métricas reales del host (riesgo DOK-1)
+    command:                                  # patrón documentado para métricas reales del host (riesgo DOK-1)
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
     pid: host
     volumes:
-      - /:/host:ro,rslave
-    networks: [monitoring]
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    networks: [monitoring]                    # se queda en bridge: target DNS 'node_exporter:9100' intacto y :9100 NO expuesto en el host
+    # Métricas de RED del host (node_network_*) reflejan el contenedor en bridge; se evalúa network_mode:host al construir el dashboard de host (M6).
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: cadvisor
     restart: unless-stopped
-    privileged: true                          # Debian/cgroup v2 (riesgo DOK-2)
+    privileged: true                          # Debian/cgroup v2: ruta confiable (riesgo DOK-2)
+    command:
+      - --docker_only=true                    # solo contenedores Docker: menos cardinalidad, evita races de arranque
+      - --housekeeping_interval=10s           # el default 1s consume mucha CPU
+      - --store_container_labels=false        # limita cardinalidad (name/image/id se conservan igual)
     devices:
       - /dev/kmsg
     volumes:
       - /:/rootfs:ro
-      - /var/run:/var/run:ro
+      - /var/run:/var/run:rw                   # socket de Docker: rw según docs oficiales
       - /sys:/sys:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro       # CLAVE en cgroup v2: evita crash 'mountpoint for cpu not found' y métricas vacías
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
     ports:
@@ -144,7 +162,7 @@ services:
       DJANGO_DB_HOST: mariadb
     networks: [monitoring]
     depends_on: [mariadb]
-    # 80 no se publica al host; NPM proxea por nombre de contenedor (M1). /metrics restringido (M3)
+    # 80 no se publica al host; NPM proxea por nombre de contenedor (M3 lo añade a la red 'proxy'). /metrics restringido (M3)
 
   tomcat:
     build: ./tomcat                           # tomcat oficial + sample app + JMX agent en M3
@@ -166,4 +184,4 @@ services:
       - wordpress_data:/var/www/html
     networks: [monitoring]
     depends_on: [mariadb]
-    # 80 no se publica; NPM proxea (M1)
+    # 80 no se publica; NPM proxea (M3 lo añade a la red 'proxy')

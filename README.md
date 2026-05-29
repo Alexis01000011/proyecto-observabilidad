@@ -56,18 +56,29 @@ observabilidad-devops/
 ## Despliegue (resumen; se detalla en M8)
 
 ```bash
+# 0) Red compartida con Nginx Proxy Manager (una sola vez en el host; idempotente)
+docker network create proxy || true
+
 # 1) Configurar secretos (NO se versionan)
-cp .env.example .env            # y rellenar valores reales
-mkdir -p secrets && printf '%s' '<APP_PASSWORD_GMAIL>' > secrets/smtp_password
+cp .env.example .env            # y rellenar valores reales (mínimo: DOMAIN, GF_SECURITY_ADMIN_USER/PASSWORD)
+mkdir -p secrets && printf '%s' '<APP_PASSWORD_GMAIL>' > secrets/smtp_password   # placeholder hasta M5
+chmod 600 secrets/smtp_password
 
 # 2) Validar y levantar
-docker compose config           # valida la sintaxis
-docker compose up -d            # levanta el stack
+docker compose config           # valida sintaxis (los WARN de variables M3 sin set son esperados)
+docker compose up -d            # levanta el stack completo
+#   …o solo el núcleo de observabilidad:
+# docker compose up -d prometheus grafana alertmanager node_exporter cadvisor blackbox_exporter
 
 # 3) Verificar
 #   - Prometheus targets UP (por túnel SSH a :9090)
 #   - Grafana por https://grafana.notalexispage.online
 ```
+
+> **Reverse proxy:** el servicio `npm` (en `/opt/npm` del servidor) debe unirse a la red externa
+> `proxy` para resolver a `grafana` y a las apps por nombre de contenedor; sin esto los proxy
+> hosts devuelven 502. Ver `npm/docker-compose.yml` (copia de referencia versionada). Solo los
+> servicios con proxy host público se unen a `proxy`; el resto queda interno en `monitoring`.
 
 ## Notas de seguridad
 

@@ -1,0 +1,32 @@
+# REFERENCIA (no se ejecuta desde aquí): copia versionada del stack de Nginx Proxy Manager
+# que vive en /opt/npm en el servidor. Se versiona para que el cambio sea reproducible y
+# revisable (regla PRO-1: primero al repo, luego al deploy). La fuente de verdad en runtime
+# sigue siendo /opt/npm/docker-compose.yml en el host — mantener ambos en sincronía a mano.
+#
+# Cambio respecto al original de M1: el servicio npm se une también a la red externa 'proxy'
+# para resolver por NOMBRE de contenedor a los servicios web del stack de observabilidad
+# (grafana ahora; django-apache, tomcat, wordpress en M3). Sin esto, NPM (en su red
+# npm_default) no puede resolver 'grafana' y el proxy host devuelve 502.
+#
+# Prerrequisito: `docker network create proxy` debe existir antes de levantar cualquiera de
+# los dos stacks. Aplicar en el servidor con:  cd /opt/npm && docker compose up -d
+services:
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: npm
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    networks:
+      - default              # red propia del proyecto NPM (se conserva)
+      - proxy                # red compartida con el stack de observabilidad
+
+networks:
+  proxy:
+    external: true
+    name: proxy
