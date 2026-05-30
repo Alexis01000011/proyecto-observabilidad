@@ -19,6 +19,6 @@ route:
 receivers:
   - name: 'correo-devops'
     email_configs:
-      # Destinatario DISTINTO al remitente — definir el valor real antes de M5.
-      - to: 'CAMBIAR_destinatario@ejemplo.com'
+      # Destinatario DISTINTO al remitente (alexiskyc@gmail.com es quien envía).
+      - to: 'cordovasalashectoralexis@gmail.com'
         send_resolved: true
