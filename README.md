@@ -5,9 +5,9 @@ Plataforma de observabilidad (**Prometheus + Grafana + Alertmanager + exporters*
 (Django/Apache, Java/Tomcat, WordPress, MariaDB), con alertas por correo, dashboards en
 Grafana y pruebas de fallo provocado.
 
-> **Estado:** núcleo de observabilidad desplegado (Prometheus · Grafana · Alertmanager ·
-> node_exporter · cAdvisor · blackbox) sobre el EC2, con Grafana accesible por dominio. Las apps,
-> las alertas por correo y los dashboards se completan en los milestones siguientes.
+> **Estado:** stack completo desplegado sobre el EC2 (observabilidad + 4 apps + MariaDB), con
+> **todos los targets UP**, **alertas por correo funcionando** (Alertmanager + SMTP Gmail) y Grafana
+> accesible por dominio. Pendientes: dashboards de Grafana (≥5) y pruebas de fallo provocado.
 > Plan completo en `../PLAN.md`; práctica fuente en `../ENUNCIADO.md`.
 
 ## Arquitectura
