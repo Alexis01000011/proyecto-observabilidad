@@ -201,7 +201,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 40s
-    networks: [monitoring]
+    networks: [monitoring, proxy]             # 'proxy' permite que NPM resuelva 'tomcat' por nombre
     # 8080 (app) vía NPM; 9404 (JMX) solo interno para Prometheus
 
   wordpress:
