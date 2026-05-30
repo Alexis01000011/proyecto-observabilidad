@@ -32,10 +32,12 @@ groups:
 
   - name: service-alerts
     rules:
-      # A4 — contenedor/target esperado caído (catch-all). En M5 se afina para no
-      # solaparse con A5/A6/A7 (riesgo ALR-2).
+      # A4 — target de infraestructura caído. Acotado a los jobs SIN alerta propia
+      # (prometheus/node_exporter/cadvisor) + el job blackbox 'wordpress_http' (detecta
+      # una caída del propio blackbox_exporter). Así NO se solapa con A5/A6/A7/A8 y se
+      # evitan correos duplicados por una sola caída (riesgo ALR-2).
       - alert: TargetDown            # A4
-        expr: up == 0
+        expr: up{job=~"prometheus|node_exporter|cadvisor|wordpress_http"} == 0
         for: 1m
         labels:
           severity: critical
@@ -44,13 +46,16 @@ groups:
           description: "El target {{ $labels.job }} ({{ $labels.instance }}) no responde."
 
       - alert: MariaDBDown           # A5
-        expr: up{job="mariadb"} == 0
+        # mysqld-exporter sigue respondiendo el scrape (up=1) aunque la BD esté caída,
+        # devolviendo mysql_up=0; por eso se cubren AMBOS casos: exporter caído (up==0)
+        # o BD no disponible (mysql_up==0).
+        expr: up{job="mariadb"} == 0 or mysql_up == 0
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "MariaDB caída"
-          description: "El exporter de MariaDB no responde (posible BD caída)."
+          description: "MariaDB no disponible (el exporter no responde o mysql_up=0)."
 
       - alert: DjangoDown            # A6
         expr: up{job="django"} == 0
