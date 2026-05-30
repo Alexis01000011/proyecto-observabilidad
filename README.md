@@ -5,8 +5,10 @@ Plataforma de observabilidad (**Prometheus + Grafana + Alertmanager + exporters*
 (Django/Apache, Java/Tomcat, WordPress, MariaDB), con alertas por correo, dashboards en
 Grafana y pruebas de fallo provocado.
 
-> **Estado:** M0 (scaffolding). El cableado fino, las apps y los dashboards se completan en
-> los milestones siguientes. Plan completo en `../PLAN.md`; práctica fuente en `../ENUNCIADO.md`.
+> **Estado:** núcleo de observabilidad desplegado (Prometheus · Grafana · Alertmanager ·
+> node_exporter · cAdvisor · blackbox) sobre el EC2, con Grafana accesible por dominio. Las apps,
+> las alertas por correo y los dashboards se completan en los milestones siguientes.
+> Plan completo en `../PLAN.md`; práctica fuente en `../ENUNCIADO.md`.
 
 ## Arquitectura
 
@@ -79,6 +81,11 @@ docker compose up -d            # levanta el stack completo
 > `proxy` para resolver a `grafana` y a las apps por nombre de contenedor; sin esto los proxy
 > hosts devuelven 502. Ver `npm/docker-compose.yml` (copia de referencia versionada). Solo los
 > servicios con proxy host público se unen a `proxy`; el resto queda interno en `monitoring`.
+>
+> **Requisito del host:** Docker debe usar el storage driver **overlay2**, no el *snapshotter*
+> containerd que Docker 29+ trae por defecto, o cAdvisor v0.49 no reporta métricas por contenedor.
+> Forzarlo en `/etc/docker/daemon.json` → `{ "features": { "containerd-snapshotter": false } }` y
+> reiniciar Docker (`sudo systemctl restart docker`).
 
 ## Notas de seguridad
 
