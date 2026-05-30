@@ -1,10 +1,13 @@
-# Blackbox Exporter — módulos de sondeo. M0 · esqueleto.
+# Blackbox Exporter — módulos de sondeo.
 modules:
   http_2xx:
     prober: http
     timeout: 5s
     http:
       method: GET
-      valid_status_codes: []        # vacío = cualquier 2xx cuenta como éxito
-      follow_redirects: true        # WordPress puede redirigir (setup/login) — riesgo APP-6
+      # WordPress recién instalado responde 302 → wp-admin/install.php (riesgo APP-6).
+      # Se aceptan 200 y 302 explícitamente para que tanto la pantalla de instalación
+      # como el sitio ya configurado cuenten como UP (probe_success=1).
+      valid_status_codes: [200, 302]
+      follow_redirects: true        # sigue el redirect del setup/login de WordPress
       preferred_ip_protocol: ip4
