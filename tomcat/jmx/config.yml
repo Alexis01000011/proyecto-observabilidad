@@ -1,5 +1,9 @@
-# JMX Exporter — configuración para Tomcat/JVM (M0 · esqueleto, se afina en M3).
-# Por defecto expone todas las MBeans; en M3 se pueden añadir reglas/whitelist.
+# JMX Exporter — configuración para Tomcat/JVM (M3).
+# Formato CLÁSICO, compatible con jmx_prometheus_javaagent 0.20.0.
+# El catch-all expone todas las MBeans (JVM + Catalina): jvm_*, java_lang_*, etc.
+# Defaults de 0.20.0: lowercaseOutputName=false y lowercaseOutputLabelNames=false,
+# por eso se ponen en true explícitamente.
+startDelaySeconds: 0
 lowercaseOutputName: true
 lowercaseOutputLabelNames: true
 rules:
