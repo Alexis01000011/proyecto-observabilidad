@@ -2,3 +2,6 @@
 Django>=5.0,<5.1
 django-prometheus>=2.3
 mysqlclient>=2.2
+# mod_wsgi compilado vía pip contra el mismo Python de la imagen (3.12),
+# para evitar el mismatch del mod_wsgi de apt (riesgo de carga del módulo).
+mod_wsgi>=5.0
