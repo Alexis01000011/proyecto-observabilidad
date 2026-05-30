@@ -175,6 +175,8 @@ services:
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}                       # default False; activar solo para depurar
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}   # https://<dominio> del formulario (CSRF tras proxy)
       DJANGO_DB_NAME: ${DJANGO_DB_NAME}
       DJANGO_DB_USER: ${DJANGO_DB_USER}
       DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD}

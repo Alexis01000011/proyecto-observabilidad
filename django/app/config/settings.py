@@ -18,7 +18,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # sin .env (la imagen real siempre recibe DJANGO_SECRET_KEY).
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "insecure-build-time-key-change-me")
 
-DEBUG = False
+# DEBUG controlado por entorno (default False). En producción detrás del proxy
+# se mantiene False; activarlo solo para depurar, ya que expone trazas y SQL.
+DEBUG = os.environ.get("DJANGO_DEBUG", "False").strip().lower() == "true"
 
 # ALLOWED_HOSTS desde env (coma-separado) + los nombres internos necesarios para
 # que el scrape de Prometheus (Host: django-apache) y los healthchecks (localhost,
@@ -28,6 +30,28 @@ ALLOWED_HOSTS = [h.strip() for h in _env_hosts.split(",") if h.strip()]
 for _internal in ("django-apache", "localhost", "127.0.0.1"):
     if _internal not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_internal)
+
+# ---------------------------------------------------------------------------
+# CSRF / proxy HTTPS (Cloudflare → NPM → Apache por HTTP)
+# ---------------------------------------------------------------------------
+# Detrás del proxy, Django recibe la petición por HTTP aunque el navegador use
+# HTTPS. NPM reenvía el esquema original en X-Forwarded-Proto; este ajuste hace
+# que request.is_secure() sea True, de modo que las cookies Secure y el chequeo
+# CSRF de Origin funcionen correctamente.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Django 4.0+ valida el header Origin en los POST. Como el formulario se sirve
+# por HTTPS (p. ej. https://django.notalexispage.online), ese origen debe
+# declararse de confianza o el POST se rechaza con 403 (fallo de CSRF). Se toma
+# de DJANGO_CSRF_TRUSTED_ORIGINS (coma-separado) y, como respaldo, se derivan
+# https://<host> de los dominios presentes en ALLOWED_HOSTS.
+_env_csrf = os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "")
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _env_csrf.split(",") if o.strip()]
+for _host in ALLOWED_HOSTS:
+    if "." in _host and _host != "127.0.0.1":
+        _origin = f"https://{_host}"
+        if _origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_origin)
 
 # ---------------------------------------------------------------------------
 # Aplicaciones
