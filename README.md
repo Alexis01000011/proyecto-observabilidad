@@ -91,5 +91,12 @@ docker compose up -d            # levanta el stack completo
 
 - Secretos **siempre fuera del repo**: solo se versiona `.env.example`; `.env` y `secrets/`
   están en `.gitignore`.
-- Prometheus / Alertmanager / exporters **no se publican**: se acceden por túnel SSH.
+- Prometheus / Alertmanager / exporters **no se publican** (atados a `127.0.0.1` en el host): se
+  acceden por **túnel SSH**. P. ej. para ver Prometheus — incluida la página `/targets`, que lista
+  el estado **UP/DOWN** de cada objetivo de scraping:
+
+  ```bash
+  ssh -i "<deploy-keys.pem>" -p 6655 -L 9090:127.0.0.1:9090 admin@<IP-EC2>
+  # luego abre http://localhost:9090/targets   (Alertmanager igual: -L 9093:127.0.0.1:9093)
+  ```
 - Regla de oro: **primero al repo, luego deploy**; nunca editar dentro del contenedor.
