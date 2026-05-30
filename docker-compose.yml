@@ -17,6 +17,9 @@ name: observabilidad-devops
 networks:
   monitoring:
     driver: bridge
+    ipam:                                   # subnet fija: la restricción `Require ip 172.28.0.0/16` de Django /metrics depende de ella
+      config:
+        - subnet: 172.28.0.0/16
   proxy:                                    # red externa COMPARTIDA con Nginx Proxy Manager (/opt/npm)
     external: true                          # se crea a mano en el host: `docker network create proxy`
     name: proxy                             # mismo objeto de red en ambos compose (sin prefijo de proyecto)
@@ -133,7 +136,9 @@ services:
     environment:
       DATA_SOURCE_NAME: "exporter:${EXPORTER_DB_PASSWORD}@(mariadb:3306)/"
     networks: [monitoring]
-    depends_on: [mariadb]
+    depends_on:
+      mariadb:
+        condition: service_healthy           # espera healthcheck: usuarios de app/exporter ya creados por el init
 
   # ===================== APLICACIONES MONITOREADAS =====================
 
@@ -143,9 +148,23 @@ services:
     restart: unless-stopped
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      DJANGO_DB_NAME: ${DJANGO_DB_NAME}                  # consumidas por ./mariadb/init/02_app_users.sh en el primer arranque
+      DJANGO_DB_USER: ${DJANGO_DB_USER}
+      DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      EXPORTER_DB_USER: ${EXPORTER_DB_USER}
+      EXPORTER_DB_PASSWORD: ${EXPORTER_DB_PASSWORD}
     volumes:
       - mariadb_data:/var/lib/mysql
-      - ./mariadb/init:/docker-entrypoint-initdb.d:ro   # crea djangodb + wordpress (M0)
+      - ./mariadb/init:/docker-entrypoint-initdb.d:ro   # crea djangodb + wordpress + usuarios (M0/M3)
+    healthcheck:                                         # gate para depends_on de exporter/apps
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     networks: [monitoring]
     # 3306 NO se publica (solo red interna)
 
@@ -160,14 +179,28 @@ services:
       DJANGO_DB_USER: ${DJANGO_DB_USER}
       DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD}
       DJANGO_DB_HOST: mariadb
-    networks: [monitoring]
-    depends_on: [mariadb]
-    # 80 no se publica al host; NPM proxea por nombre de contenedor (M3 lo añade a la red 'proxy'). /metrics restringido (M3)
+    networks: [monitoring, proxy]             # 'proxy' permite que NPM resuelva 'django-apache' por nombre
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    # 80 no se publica al host; NPM proxea por nombre de contenedor. /metrics restringido a 172.28.0.0/16 (apache-site.conf)
 
   tomcat:
     build: ./tomcat                           # tomcat oficial + sample app + JMX agent en M3
     container_name: tomcat
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     networks: [monitoring]
     # 8080 (app) vía NPM; 9404 (JMX) solo interno para Prometheus
 
@@ -182,6 +215,8 @@ services:
       WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
     volumes:
       - wordpress_data:/var/www/html
-    networks: [monitoring]
-    depends_on: [mariadb]
-    # 80 no se publica; NPM proxea (M3 lo añade a la red 'proxy')
+    networks: [monitoring, proxy]             # 'proxy' permite que NPM resuelva 'wordpress' por nombre
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    # 80 no se publica; NPM proxea por nombre de contenedor
