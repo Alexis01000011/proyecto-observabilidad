@@ -15407,7 +15407,8 @@
   "refresh": "1m",
   "schemaVersion": 41,
   "tags": [
-    "linux"
+    "linux",
+    "observabilidad"
   ],
   "templating": {
     "list": [

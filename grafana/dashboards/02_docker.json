@@ -741,7 +741,8 @@
   "style": "dark",
   "tags": [
     "cadvisor",
-    "docker"
+    "docker",
+    "observabilidad"
   ],
   "templating": {
     "list": [

@@ -3597,7 +3597,8 @@
   "style": "dark",
   "tags": [
     "Percona",
-    "MySQL"
+    "MySQL",
+    "observabilidad"
   ],
   "templating": {
     "list": [
