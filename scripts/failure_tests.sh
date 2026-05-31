@@ -9,6 +9,10 @@
 #   - 512 MB es ~6% de los 8 GB de esta instancia: nunca alcanza el umbral del 85%. Se
 #     dimensiona el stress al host (~5.4 GB) para rozar ~87% y cruzar el umbral.
 #
+# Imagen: progrium/stress (del enunciado) usa el manifiesto Docker v1 (2014) que Docker 29
+# ya no soporta ("unsupported manifest media type"). Se usa polinux/stress, un reemplazo con
+# el MISMO binario `stress` y los mismos flags; su entrypoint no es `stress`, por eso se antepone.
+#
 # Uso:
 #   bash scripts/failure_tests.sh cpu        # satura CPU 2 vCPU   (parar: docker stop stress-cpu)
 #   bash scripts/failure_tests.sh mem        # satura RAM ~5.4 GB  (parar: docker stop stress-mem)
